@@ -5,8 +5,6 @@ from matplotlib import cm
 from collections import OrderedDict, Counter
 from getdist import plots, MCSamples
 
-#test
-
 #Auxiliary functions
 def try_mkdir(name):
 	this_dir=os.getcwd()+'/'
