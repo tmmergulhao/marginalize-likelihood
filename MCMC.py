@@ -15,18 +15,6 @@ def try_mkdir(name):
 	except:
 		pass
 
-def load_dictionary(filename):
-    try:
-        with open(filename) as json_file:
-            dic = json.load(json_file,object_pairs_hook=OrderedDict)
-            
-    except:
-        print('Problem loading the dictionary with priors!')
-        print('Files are supposed to be at', filename)
-        print('Check your priors directory, prior filename, and try again.')
-        sys.exit(-1)
-    return dic
-
 class MCMC():
 
     def __init__(self,nwalkers,prior_name):
@@ -37,45 +25,29 @@ class MCMC():
             prior_name (str): Name of the .json prior name with the parameters boundaries 
         """
 
-        #Initialise the main directories
-        self.priors_dir = os.getcwd()+'/priors/'; try_mkdir(self.priors_dir)
-        self.chains_dir = os.getcwd()+'/chains/'; try_mkdir(self.chains_dir)
-        self.figures_dir = os.getcwd()+"/figures/"; try_mkdir(self.figures_dir)
-
-        #Set an initial number of walkers and the standard burnin fraction
         self.nwalkers = nwalkers
+        directory = os.getcwd()+'/priors/'
         self.burnin_frac = 0.5
 
-        #Load the prior file and get its specifications
-        self.prior_dictionary = load_dictionary(self.priors_dir+prior_name+'.json')
+        try:
+            with open(directory+prior_name+'.json') as json_file:
+                dic = json.load(json_file,object_pairs_hook=OrderedDict)
+                
+        except:
+            print('Problem loading the dictionary with priors!')
+            print('Files are supposed to be at', directory)
+            print('Check your priors directory, prior filename, and try again.')
+            sys.exit(-1)
+
+        self.prior_dictionary = dic #Save the prior dictionary
         print('Using ',prior_name,'file')
-        self.ndim = len(list(self.prior_dictionary.keys()))
+        self.ndim = len(list(dic.keys()))
         self.prior_bounds = np.zeros((2,self.ndim))
         self.labels = []
-        for x in enumerate(list(self.prior_dictionary.keys())):
+        for x in enumerate(list(dic.keys())):
             index, key = x
             self.labels.append(key)
-            self.prior_bounds[0,index],self.prior_bounds[1,index] = self.prior_dictionary.get(key)
-
-    def ChangeChainsDir(self, new_dir):
-        """Change the standard directory to save the chains
-
-        Args:
-            new_dir (str): The new directory
-        """
-        self.chains_dir = new_dir
-        print("Chain directory updated. The outputs are going to be saved at:")
-        print(self.chains_dir)
-
-    def ChangeFiguresDir(self, new_dir):
-        """Change the standard directory to save the figures
-
-        Args:
-            new_dir (str): The new directory
-        """
-        self.figures_dir = new_dir
-        print("Figures directory updated. The figures are going to be saved at:")
-        print(self.figures_dir)
+            self.prior_bounds[0,index],self.prior_bounds[1,index] = dic.get(key)
 
     def set_walkers(self, nwalkers):
         """Allow the user to change the number of walkers later the class is initialized
@@ -86,35 +58,32 @@ class MCMC():
         self.nwalkers = nwalkers
 
     def set_burnin_frac(self, burnin_frac):
-        """Allow the user to change the usual burnin_frac used in the analysis. The standard value 
-        is 0.5 (i.e, 50% of the chain is discarded away)
+        """Allow the user to change the usual burnin_frac used in the analysis. The standard value is 0.5
+        (i.e, 50% of the chain is discarded away)
 
         Args:
-            burnin_frac (float): The percentage of the chain that must be discarded when performing 
-            some analysis
+            burnin_frac (float): The percentage of the chain that must be discarded when performing some analysis
         """
         self.nwalkers = burnin_frac
 
     def create_walkers(self, mode, file = False, x0 =None, sigmas = None, ranges=None):
-        """Create the walkers following three different recipes. Each mode will require a different 
-        set of input
+        """Create the walkers following three different recipes. Each mode will require a different set of 
+        input
 
         Args:
             mode (str): The name of the recipe to be used. Options: 
 
-            1) 'gaussian': Distribute the walkers following a Gaussian distribution with mean x0 
-            (array) and variance sigma (array).You need to give as input the x0 and sigmas
+            1) 'gaussian': Distribute the walkers following a Gaussian distribution with mean x0 (array) and variance sigma (array).
+            You need to give as input the x0 and sigmas
 
-            2) 'uniform': Distribute the walkers following a uniform distribution inside the 
-            parameter boundaries defined in the prior file You need to give nothing as input
+            2) 'uniform': Distribute the walkers following a uniform distribution inside the parameter boundaries defined in the prior file
+            You need to give nothing as input
 
             'uniform_thin': Same as above, but can choose a different range
             You need to give x0 and ranges as input
 
-            file (bool, optional): Whether to save or not the initial positions in .txt files. 
-            Defaults to False.
-            x0 ([np.array], optional): Used in the 'gaussian' and 'uniform_thin' recipes. 
-            Defaults to None.
+            file (bool, optional): Whether to save or not the initial positions in .txt files. Defaults to False.
+            x0 ([np.array], optional): Used in the 'gaussian' and 'uniform_thin' recipes. Defaults to None.
             sigmas ([np.array], optional): Used in the 'gaussian' recipe. Defaults to None.
             ranges ([np.array], optional): Used in the 'uniform_thin' recipe. Defaults to None.
 
@@ -190,7 +159,7 @@ class MCMC():
         return within_chain_var, mean_chain, chain_length
     ###
 
-    def plot_walkers(self,samplers, name):
+    def plot_walkers(self,samplers,name, save = True):
         '''
         Get a list of samplers and make the 1D plot. The input must be an array [n_samplers]
         '''
@@ -212,10 +181,16 @@ class MCMC():
                 ax.set_ylabel(this_param,size=35)
             del chain
 
-        fig.tight_layout()
-        #directory to figures
-        plt.savefig(self.figures_dir+name+'_walkers.pdf')
-        plt.close('all')
+        if save:
+            fig.tight_layout()
+            #directory to figures
+            this_dir = os.getcwd()
+            figures_dir = this_dir+'/figures/'
+            try_mkdir('figures')
+            plt.savefig(figures_dir+name+'_walkers.pdf')
+            plt.close('all')
+        else:
+            plt.show()
 
     def plot_1d(self,samplers, name):
         plot_settings = {
@@ -227,10 +202,11 @@ class MCMC():
         N_samples = len(samplers)
         samples = []
         chain = samplers[0].get_chain()
+        chain_length = chain.shape[0]
+        del chain
         for i in range(0,N_samples):
             chain = samplers[i].get_chain(flat=True)
-            samples.append(MCSamples(samples = chain,labels=self.labels,names=self.labels,
-            settings = plot_settings))
+            samples.append(MCSamples(samples = chain,labels=self.labels,names=self.labels,settings = plot_settings))
         del chain
         g1 = plots.get_subplot_plotter(width_inch=20)
         g1.settings.legend_fontsize = 20
@@ -239,19 +215,23 @@ class MCMC():
         g1.settings.title_limit = True
         g1.plots_1d(samples)
 
-        #Save the figure
-        figurehandle = self.figures_dir+name
-        g1.export(figurehandle+'1D_ALL.png')
+        #directory to figures
+        this_dir = os.getcwd()
+        try_mkdir('figures')
+        figures_dir = this_dir+'/figures/'+name
+        g1.export(figures_dir+'1D_ALL.png')
         plt.close('all')
 
-    def plot_corner(self, handle, gelman = None, width_inch = 15, ranges = {},
+    def plot_corner(self, handle, gelman = None, save = None, width_inch = 15, ranges = {},
     plot_settings = {'fine_bins':1000,
     'fine_bins_2D':1500, 'smooth_scale_1D':0.3, 'smooth_scale_2D':0.2}):
+
+        chain_dir = os.getcwd()+'/chains/'
         
         if gelman is not None: #If the Gelman-Rubin was used, join the N chains
             N_chains = gelman['N']
             for i in range(0,N_chains):
-                name = self.chains_dir+handle+'Run_{}.h5'.format(i)
+                name = chain_dir+handle+'Run_{}.h5'.format(i)
                 backend = emcee.backends.HDFBackend(name, read_only = True)
                 chain = backend.get_chain(flat=False)
                 chain_size = chain.shape[0] #Get the size of the array
@@ -265,7 +245,7 @@ class MCMC():
                     final_chain = np.vstack((final_chain, chain))
 
         else: #Otherwise, just use a single chain to look for the ML parameters
-            name = self.chains_dir+handle+'.h5'
+            name = chain_dir+handle+'.h5'
             backend = emcee.backends.HDFBackend(name, read_only = True)
             chain = backend.get_chain(flat=False)
             chain_size = chain.shape[0] #Get the size of the array
@@ -273,8 +253,7 @@ class MCMC():
             final_chain = backend.get_chain(flat=True, discard = burnin)
 
 
-        samples = MCSamples(samples = final_chain, labels=self.labels, names=self.labels, 
-        settings = plot_settings, ranges = ranges)
+        samples = MCSamples(samples = final_chain, labels=self.labels, names=self.labels, settings = plot_settings, ranges = ranges)
 
         g1 = plots.get_subplot_plotter(width_inch = width_inch)
         g1.settings.legend_fontsize = 20
@@ -284,27 +263,22 @@ class MCMC():
         g1.settings.progress = True
         g1.triangle_plot(samples)
 
-        #Save the figure
-        figurehandle = self.figures_dir+handle
-        g1.export(figurehandle+'_Corner.png')
-        plt.close('all')
+        if save is not None:
+            #directory to figures
+            this_dir = os.getcwd()
+            try_mkdir('figures')
+            figures_dir = this_dir+'/figures/'
+            plt.savefig(figures_dir+save+'.png')
+            plt.close('all')
 
-    def plot_CorrMatrix(self, handle, gelman = None, figsize=(9,9)):
-        """Plot the Correlation Matrix using the MCMC chains
+    def plot_CorrMatrix(self, handle, gelman = None):
 
-        Args:
-            handle (str): The handle used to name the MCMC results
-            gelman (dictionary, optional): If there are parallel chains, specify giving as input
-            the gelman file you used to run them. Only the key "N" is used. Defaults to None.
-            save (string, optional): If want to save the figure, give as input the name of the file. 
-            Defaults to None.
-            figsize (tuple, optional): The size of the figure. Defaults to (9,9).
-        """
+        chain_dir = os.getcwd()+'/chains/'
 
         if gelman is not None: #If the Gelman-Rubin was used, join the N chains
             N_chains = gelman['N']
             for i in range(0,N_chains):
-                name = self.chains_dir+handle+'Run_{}.h5'.format(i)
+                name = chain_dir+handle+'Run_{}.h5'.format(i)
                 backend = emcee.backends.HDFBackend(name, read_only = True)
                 chain = backend.get_chain(flat=False)
                 chain_size = chain.shape[0] #Get the size of the array
@@ -318,14 +292,14 @@ class MCMC():
                     final_chain = np.vstack((final_chain, chain))
 
         else: #Otherwise, just use a single chain to look for the ML parameters
-            name = self.chains_dir+handle+'.h5'
+            name = chain_dir+handle+'.h5'
             backend = emcee.backends.HDFBackend(name, read_only = True)
             chain = backend.get_chain(flat=False)
             chain_size = chain.shape[0] #Get the size of the array
             burnin = int(self.burnin_frac*chain_size)
             final_chain = backend.get_chain(flat=True, discard = burnin)
 
-        fig,(ax1) = plt.subplots(1,1, figsize = figsize)
+        fig,(ax1) = plt.subplots(1,1, figsize=(9,9))
 
         im = ax1.imshow(np.corrcoef(final_chain.T), cmap = plt.get_cmap('RdBu'))
     
@@ -342,25 +316,21 @@ class MCMC():
         ax1.grid(linewidth=10, color='white')
         fig.colorbar(im)
 
-
-        plt.savefig(self.figures_dir+handle+'_CorrMatrix.png')
+        #directory to figures
+        this_dir = os.getcwd()
+        try_mkdir('figures')
+        figures_dir = this_dir+'/figures/'
+        plt.savefig(figures_dir+handle+'_Corr.png')
         plt.close('all')
         
-    def in_prior(self, theta, params = None):
-        """Return True if parameters are inside priors and False otherwise. If you need that only 
-        part of the parameters should be tested you must give list with the labels associated to 
-        them. The labels must be exactly equal as defined in the prior file.
+    def in_prior(self,x,params = None):
+        #Return True if parameters are inside priors and False otherwise
+        #If you need that only part of the parameters should be tested you must give list with the
+        #labels associated to them. The labels must be exactly equal as defined in the prior file.
 
-        Args:
-            x (array): The set of parameters to be tested
-            params (_type_, optional): _description_. Defaults to None.
-
-        Returns:
-            boolean: True if parameters are inside, False otherwise.
-        """
         if params is None:
             for i,this_param in enumerate(self.prior_bounds.T):
-                this_value = theta[i]
+                this_value = x[i]
                 this_lower_bound,this_upper_bound = this_param
                 if(not(this_lower_bound<this_value<this_upper_bound)):
                     return False
@@ -369,7 +339,7 @@ class MCMC():
             for this_param in params:
                 this_index = self.labels.index(this_param)
                 this_lower_bound, this_upper_bound = self.prior_dictionary[this_param]
-                if(not(this_lower_bound<theta[this_index]<this_upper_bound)):
+                if(not(this_lower_bound<x[this_index]<this_upper_bound)):
                     return False
             return True
 
@@ -384,14 +354,16 @@ class MCMC():
         return total_contribution
 
     def run_MCMC(self,name,steps,pos,loglikelihood,new=True,plots = False,args=None, a=2):
-        filename = self.chains_dir+name+'.h5'
+        try_mkdir('chains')
+        chain_dir = os.getcwd()+'/chains/'
+        filename = chain_dir+name+'.h5'
         backend  = emcee.backends.HDFBackend(filename)
 
         #array to storage the autocorr time over steps
         try:
-            autocorr = np.loadtxt(self.chains_dir+name+'_tau.txt')
+            autocorr = np.loadtxt(chain_dir+name+'_tau.txt')
             autocorr = autocorr.tolist()
-            acceptance = np.loadtxt(self.chains_dir+name+'_acceptance.txt')
+            acceptance = np.loadtxt(chain_dir+name+'_acceptance.txt')
             acceptance = acceptance.tolist()
         except:
             pass
@@ -400,11 +372,9 @@ class MCMC():
             acceptance = []
         
         if args is not None:
-            sampler = emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,args=args,
-            backend=backend,moves=[emcee.moves.StretchMove(a=a)],threads=1)
+            sampler = emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,args=args,backend=backend,moves=[emcee.moves.StretchMove(a=a)],threads=1)
         else:
-            sampler = emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,backend=backend,
-            moves=[emcee.moves.StretchMove(a=a)],threads = 1)
+            sampler = emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,backend=backend,moves=[emcee.moves.StretchMove(a=a)],threads = 1)
         
         if new:
             #sampler.run_mcmc(pos,steps,progress=True)
@@ -416,8 +386,8 @@ class MCMC():
                 acceptance.append(np.mean(sampler.acceptance_fraction))
                 corr_array = np.asarray(autocorr)
                 print('Mean acceptance fraction:', np.mean(sampler.acceptance_fraction))
-                np.savetxt(self.chains_dir+name+'_tau.txt',corr_array)
-                np.savetxt(self.chains_dir+name+'_acceptance.txt',acceptance)
+                np.savetxt(chain_dir+name+'_tau.txt',corr_array)
+                np.savetxt(chain_dir+name+'_acceptance.txt',acceptance)
                 print('Mean autocorre_time:', np.mean(tau))
                 
         else:
@@ -430,8 +400,8 @@ class MCMC():
                 acceptance.append(np.mean(sampler.acceptance_fraction))
                 corr_array = np.asarray(autocorr)
                 print('Mean acceptance fraction:', np.mean(sampler.acceptance_fraction))
-                np.savetxt(self.chains_dir+name+'_tau.txt',corr_array)
-                np.savetxt(self.chains_dir+name+'_acceptance.txt',acceptance)
+                np.savetxt(chain_dir+name+'_tau.txt',corr_array)
+                np.savetxt(chain_dir+name+'_acceptance.txt',acceptance)
                 print('Mean autocorre_time:', np.mean(tau))
 
         if plots:
@@ -440,24 +410,21 @@ class MCMC():
             #self.plot_log_prob([sampler],name)
 
     def get_chain(self,handle, gelman = None):
-        """Search in the total sample of walker positions the set set of parameters that gives the 
-        best-fit to the data
+        """Search in the total sample of walker positions the set set of parameters that gives the best-fit to the data
 
         Args:
             handle (str): Handle unsed in the MCMC analysis
-            gelman (dic, optional): The dicitonary used as input for the Gelman-Rubin convergence 
-            criteria. Defaults to None.
+            gelman (dic, optional): The dicitonary used as input for the Gelman-Rubin convergence criteria. Defaults to None.
 
         Returns:
-            [np.array[1,nparams] ]: An array with the parameter that gives the better fit to the 
-            data
+            [np.array[1,nparams] ]: An array with the parameter that gives the better fit to the data
         """
+        chain_dir = os.getcwd()+'/chains/'
 
-        #If the Gelman-Rubin was used, join the N chains and look for the ML parameters
-        if gelman is not None: 
+        if gelman is not None: #If the Gelman-Rubin was used, join the N chains and look for the ML parameters
             N_chains = gelman['N']
             for i in range(0,N_chains):
-                name = self.chains_dir+handle+'Run_{}.h5'.format(i)
+                name = chain_dir+handle+'Run_{}.h5'.format(i)
                 backend = emcee.backends.HDFBackend(name, read_only = True)
                 chain = backend.get_chain(flat=False)
                 chain_size = chain.shape[0] #Get the size of the array
@@ -469,7 +436,7 @@ class MCMC():
                     final_chain = np.vstack((final_chain, chain))
 
         else: #Otherwise, just use a single chain to look for the ML parameters
-            name = self.chains_dir+handle+'.h5'
+            name = chain_dir+handle+'.h5'
             backend = emcee.backends.HDFBackend(name, read_only = True)
             chain = backend.get_chain(flat=False)
             chain_size = chain.shape[0] #Get the size of the array
@@ -479,24 +446,21 @@ class MCMC():
         return final_chain
 
     def get_ML(self,handle, gelman = None):
-        """Search in the total sample of walker positions the set set of parameters that gives 
-        the best-fit to the data
+        """Search in the total sample of walker positions the set set of parameters that gives the best-fit to the data
 
         Args:
             handle (str): Handle unsed in the MCMC analysis
-            gelman (dic, optional): The dicitonary used as input for the Gelman-Rubin convergence 
-            criteria. Defaults to None.
+            gelman (dic, optional): The dicitonary used as input for the Gelman-Rubin convergence criteria. Defaults to None.
 
         Returns:
-            [np.array[1,nparams] ]: An array with the parameter that gives the better fit to 
-            the data
+            [np.array[1,nparams] ]: An array with the parameter that gives the better fit to the data
         """
+        chain_dir = os.getcwd()+'/chains/'
 
-        #If the Gelman-Rubin was used, join the N chains and look for the ML parameters
-        if gelman is not None: 
+        if gelman is not None: #If the Gelman-Rubin was used, join the N chains and look for the ML parameters
             N_chains = gelman['N']
             for i in range(0,N_chains):
-                name = self.chains_dir+handle+'Run_{}.h5'.format(i)
+                name = chain_dir+handle+'Run_{}.h5'.format(i)
                 backend = emcee.backends.HDFBackend(name, read_only = True)
                 chain = backend.get_chain(flat=False)
                 chain_size = chain.shape[0] #Get the size of the array
@@ -511,7 +475,7 @@ class MCMC():
                     final_logprob = np.hstack((final_logprob, logprob))
 
         else: #Otherwise, just use a single chain to look for the ML parameters
-            name = self.chains_dir+handle+'.h5'
+            name = chain_dir+handle+'.h5'
             backend = emcee.backends.HDFBackend(name, read_only = True)
             chain = backend.get_chain(flat=False)
             chain_size = chain.shape[0] #Get the size of the array
@@ -525,10 +489,12 @@ class MCMC():
 
     def get_logprop(self, handle, gelman = None):
         
-        if gelman is not None: 
+        chain_dir = os.getcwd()+'/chains/'
+
+        if gelman is not None: #If the Gelman-Rubin was used, join the N chains and look for the ML parameters
             N_chains = gelman['N']
             for i in range(0,N_chains):
-                name = self.chains_dir+handle+'Run_{}.h5'.format(i)
+                name = chain_dir+handle+'Run_{}.h5'.format(i)
                 backend = emcee.backends.HDFBackend(name, read_only = True)
                 chain = backend.get_chain(flat=False)
                 chain_size = chain.shape[0] #Get the size of the array
@@ -540,7 +506,7 @@ class MCMC():
                     final_logprob = np.hstack((final_logprob, logprob))
 
         else: #Otherwise, just use a single chain to look for the ML parameters
-            name = self.chains_dir+handle+'.h5'
+            name = chain_dir+handle+'.h5'
             backend = emcee.backends.HDFBackend(name, read_only = True)
             chain = backend.get_chain(flat=False)
             chain_size = chain.shape[0] #Get the size of the array
@@ -551,15 +517,13 @@ class MCMC():
         return final_logprob
 
     def run_MCMC_MPI(self,name,steps,pos,loglikelihood,pool,new=True,plots = False,args=None):
-
-        filename = self.chains_dir+name+'.h5'
+        try_mkdir('chains')
+        filename = os.getcwd()+'/chains/'+name+'.h5'
         backend  = emcee.backends.HDFBackend(filename)
         if args is not None:
-            sampler = emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,args=args,
-            backend=backend,pool=pool)
+            sampler = emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,args=args,backend=backend,pool=pool)
         else:
-            sampler = emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,backend=backend,
-            pool=pool)
+            sampler = emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,backend=backend,pool=pool)
         if new:
             sampler.run_mcmc(pos,steps,progress=True)
         else:
@@ -574,6 +538,10 @@ class MCMC():
         '''
         This function start the chains and only stop when convergence criteria is achieved
         '''
+
+        #Directory where the chains will be storaged
+        try_mkdir('chains')
+        directory_to_chain = os.getcwd()+"/chains/"
 
         #Read the Convergence Parameters from a dictionary
         try:
@@ -611,14 +579,12 @@ class MCMC():
         #Create all the samplers and their walkers
         for i in range(0,N):
             #create the backend
-            filename = self.chains_dir+handle+'Run_'+str(i)+'.h5'
+            filename = directory_to_chain+handle+'Run_'+str(i)+'.h5'
             backend   = emcee.backends.HDFBackend(filename)
             if args is not None:
-                list_samplers.append(emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,
-                args=args,backend=backend,moves=[emcee.moves.StretchMove(a=a)]))
+                list_samplers.append(emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,args=args,backend=backend,moves=[emcee.moves.StretchMove(a=a)]))
             else:
-                list_samplers.append(emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,
-                backend=backend,moves=[emcee.moves.StretchMove(a=a)]))
+                list_samplers.append(emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,backend=backend,moves=[emcee.moves.StretchMove(a=a)]))
 
         #Kicking off all chains to have the minimum length
         if new_run:
@@ -627,12 +593,10 @@ class MCMC():
                 print(to_print.center(80, '*'))
                 name_initial_pos = handle+'_initial_pos_Run_'+str(i)
                 print('Positions for the chain', i)
-                pos = self.create_walkers(initial_option,file=name_initial_pos,x0=x0,sigmas=sigmas,
-                ranges=ranges)
+                pos = self.create_walkers(initial_option,file=name_initial_pos,x0=x0,sigmas=sigmas,ranges=ranges)
                 print('Go!')
                 list_samplers[i].run_mcmc(pos,minlength,progress=True)
-                within_chain_var[i],mean_chain[i],chain_length = \
-                    self.prep_gelman_rubin(list_samplers[i])
+                within_chain_var[i],mean_chain[i],chain_length = self.prep_gelman_rubin(list_samplers[i])
 
         else:
             for i in range(0,N):
@@ -640,12 +604,11 @@ class MCMC():
                 print(to_print.center(80, '*'))
                 print('Go!')
                 list_samplers[i].run_mcmc(None,minlength,progress=True)
-                within_chain_var[i],mean_chain[i],chain_length = \
-                    self.prep_gelman_rubin(list_samplers[i])
-        
-        #At this points all chains have the same length. It is checked if they already converged. 
-        #If that is not the case they continue to run
-
+                within_chain_var[i],mean_chain[i],chain_length = self.prep_gelman_rubin(list_samplers[i])
+        '''
+        At this points all chains have the same length. It is checked if they already converged. If that is not the case they 
+        continue to run
+        '''
         print('All chains with the minimum length!')
         print('Checking convergence...')
         plotname = handle+'_'+str(counter)
@@ -658,20 +621,16 @@ class MCMC():
         if any(eps > epsilon):
             print('Did not converge! Running more steps...')
 
-        
-        #If the minimum length was not enough, more steps are done. As soon as the epsilon achieves crosses the threshold, the analysis is done.
-        
+        '''
+        If the minimum length was not enough, more steps are done. As soon as the epsilon achieves crosses the threshold, the analysis is done.
+        '''
         while any(eps > epsilon):
             counter += 1
             print('Running iteration', counter)
             for i in range(0,N):
                 list_samplers[i].run_mcmc(None,convergence_steps,progress=True)
-
-                within_chain_var[i],mean_chain[i],chain_length = \
-                    self.prep_gelman_rubin(list_samplers[i])
-
-            scalereduction = \
-                self.gelman_rubin_convergence(within_chain_var,mean_chain,chain_length/2)
+                within_chain_var[i],mean_chain[i],chain_length = self.prep_gelman_rubin(list_samplers[i])
+            scalereduction = self.gelman_rubin_convergence(within_chain_var,mean_chain,chain_length/2)
             eps = abs(1-scalereduction)
 
             print('epsilon = ',eps)
@@ -683,18 +642,22 @@ class MCMC():
         print('Plotting walkers position over steps...')
         self.plot_walkers(list_samplers,plotname)
         print('Plotting the correlation matrix...')
-        self.plot_CorrMatrix(handle = handle, gelman=gelman_rubins, save = handle+"_CorrMatrix",
-        figsize = (15,15))
+        self.plot_CorrMatrix(handle = handle, gelman=gelman_rubins)
         print('Making a corner plot...')
-        self.plot_corner(handle = handle, gelman = gelman_rubins, save = handle+"_Corner", 
-        width_inch=25)
+        self.plot_corner(handle = handle, gelman = gelman_rubins, save = handle+"_Corner")
         print('Done!')
         
-    def run_MCMC_gelman_mpi(self,gelman_rubins,handle,loglikelihood,pool,x0=None,sigmas=None,
-    new_run = True, args=None,ranges=None, a=2):
+
+    def run_MCMC_gelman_mpi(self,gelman_rubins,handle,loglikelihood,pool,x0=None,sigmas=None,new_run = True,
+    args=None,ranges=None, a=2):
         '''
         This function start the chains and only stop when convergence criteria is achieved
         '''
+
+        #Directory where the chains will be storaged
+        try_mkdir('chains')
+        directory_to_chain = os.getcwd()+"/chains/"
+
         #Read the Convergence Parameters from a dictionary
         try:
             N = gelman_rubins['N']
@@ -729,7 +692,7 @@ class MCMC():
         #Create all the samplers and their walkers
         for i in range(0,N):
             #create the backend
-            filename = self.chains_dir+handle+'Run_'+str(i)+'.h5'
+            filename = directory_to_chain+handle+'Run_'+str(i)+'.h5'
             backend   = emcee.backends.HDFBackend(filename)
             if args is not None:
                 list_samplers.append(emcee.EnsembleSampler(self.nwalkers,self.ndim,loglikelihood,
@@ -745,8 +708,7 @@ class MCMC():
                 print(to_print.center(80, '*'))
                 name_initial_pos = handle+'_initial_pos_Run_'+str(i)
                 print('Positions for the chain', i)
-                pos = self.create_walkers(initial_option,file=name_initial_pos,x0=x0,sigmas=sigmas,
-                ranges=ranges)
+                pos = self.create_walkers(initial_option,file=name_initial_pos,x0=x0,sigmas=sigmas,ranges=ranges)
                 print('Go!')
                 list_samplers[i].run_mcmc(pos,minlength,progress=True)
                 within_chain_var[i],mean_chain[i],chain_length = self.prep_gelman_rubin(list_samplers[i])
@@ -757,15 +719,14 @@ class MCMC():
                 print(to_print.center(80, '*'))
                 print('Go!')
                 list_samplers[i].run_mcmc(None,minlength,progress=True)
-                within_chain_var[i],mean_chain[i],chain_length = \
-                    self.prep_gelman_rubin(list_samplers[i])
-        
-        #At this points all chains have the same length. It is checked if they already converged. 
-        #If that is not the case they continue to run
-        
+                within_chain_var[i],mean_chain[i],chain_length = self.prep_gelman_rubin(list_samplers[i])
+        '''
+        At this points all chains have the same length. It is checked if they already converged. If that is not the case they 
+        continue to run
+        '''
         print('All chains with the minimum length!')
         print('Checking convergence...')
-        plotname = handle+'_'+str(counter)+'_'
+        plotname = handle+'_'+str(counter)
         self.plot_1d(list_samplers,plotname)
         scalereduction = self.gelman_rubin_convergence(within_chain_var,mean_chain,chain_length/2)
         eps = abs(1-scalereduction)
@@ -775,51 +736,46 @@ class MCMC():
         if any(eps > epsilon):
             print('Did not converge! Running more steps...')
 
-        
-        #If the minimum length was not enough, more steps are done. As soon as the epsilon achieves 
-        # crosses the threshold, the analysis is done.
-        
+        '''
+        If the minimum length was not enough, more steps are done. As soon as the epsilon achieves crosses the threshold, the analysis is done.
+        '''
         while any(eps > epsilon):
             counter += 1
             print('Running iteration', counter)
             for i in range(0,N):
                 list_samplers[i].run_mcmc(None,convergence_steps,progress=True)
-                within_chain_var[i],mean_chain[i],chain_length = \
-                    self.prep_gelman_rubin(list_samplers[i])
-
-            scalereduction = \
-                self.gelman_rubin_convergence(within_chain_var,mean_chain,chain_length/2)
+                within_chain_var[i],mean_chain[i],chain_length = self.prep_gelman_rubin(list_samplers[i])
+            scalereduction = self.gelman_rubin_convergence(within_chain_var,mean_chain,chain_length/2)
             eps = abs(1-scalereduction)
 
             print('epsilon = ',eps)
 
             self.plot_1d(list_samplers,handle+'_'+str(counter))
-        
+
+
         print('Convergence Achieved!')
         print('Plotting walkers position over steps...')
-        self.plot_walkers(list_samplers, handle)
+        self.plot_walkers(list_samplers,plotname)
         print('Plotting the correlation matrix...')
-        self.plot_CorrMatrix(handle = handle, gelman=gelman_rubins)
+        self.plot_CorrMatrix(handle = handle, gelman=gelman_rubins, save = handle+"_CorrMatrix")
         print('Making a corner plot...')
-        self.plot_corner(handle = handle, gelman = gelman_rubins)
+        self.plot_corner(handle = handle, gelman = gelman_rubins, save = handle+"_Corner")
         print('Done!')
 
 
-def get_ML(handle, chain_dir, gelman = None, burnin_frac = 0.5):
-    """Search in the total sample of walker positions the set set of parameters that gives the 
-    best-fit to the data
+def get_ML(handle, gelman = None, burnin_frac = 0.5):
+    """Search in the total sample of walker positions the set set of parameters that gives the best-fit to the data
 
     Args:
         handle (str): Handle unsed in the MCMC analysis
-        gelman (dic, optional): The dicitonary used as input for the Gelman-Rubin convergence 
-        criteria. Defaults to None.
+        gelman (dic, optional): The dicitonary used as input for the Gelman-Rubin convergence criteria. Defaults to None.
 
     Returns:
         [np.array[1,nparams] ]: An array with the parameter that gives the better fit to the data
     """
+    chain_dir = os.getcwd()+'/chains/'
 
-    #If the Gelman-Rubin was used, join the N chains and look for the ML parameters
-    if gelman is not None: 
+    if gelman is not None: #If the Gelman-Rubin was used, join the N chains and look for the ML parameters
         N_chains = gelman['N']
         for i in range(0,N_chains):
             name = chain_dir+handle+'Run_{}.h5'.format(i)
@@ -850,20 +806,20 @@ def get_ML(handle, chain_dir, gelman = None, burnin_frac = 0.5):
     ML_params = final_chain[index_min]
     return ML_params
 
-def get_std(handle, chain_dir, gelman = None, burnin_frac = 0.5):
+def get_std(handle, gelman = None, burnin_frac = 0.5):
     """Compute of the standard deviation of effective chain
     
     Args:
         handle (str): Handle unsed in the MCMC analysis
-        gelman (dic, optional): The dicitonary used as input for the Gelman-Rubin convergence 
-        criteria. Defaults to None.
+        gelman (dic, optional): The dicitonary used as input for the Gelman-Rubin convergence criteria. Defaults to None.
 
     Returns:
         [np.array[1,nparams] ]: An array with the standard deviation of all parameters
     """
 
-    #If the Gelman-Rubin was used, join the N chains and look for the ML parameters
-    if gelman is not None: 
+    chain_dir = os.getcwd()+'/chains/'
+    
+    if gelman is not None: #If the Gelman-Rubin was used, join the N chains and look for the ML parameters
         N_chains = gelman['N']
         for i in range(0,N_chains):
             name = chain_dir+handle+'Run_{}.h5'.format(i)
@@ -893,9 +849,15 @@ def get_std(handle, chain_dir, gelman = None, burnin_frac = 0.5):
     return np.std(final_chain, axis = 0)
 
 def main():
-    prior = 'FixedCosmo_MT_model1'    
+    prior = 'PRIOR_A_1T_stoc_hd_coev'    
     nwalkers = 30
     MCMC_test = MCMC(nwalkers,prior)
+    MCMC_flat_prior = MCMC_test.in_prior
+    gaussian_prior = MCMC_test.log_gaussian_prior
+    x0 = [2.14]
+    sigma = [0.2]
+    print(gaussian_prior([2.14,2,2,2,2,2,2,2],x0=x0,sigma=sigma,params=['A']))
+
 
 if __name__ == '__main__':
     main()
