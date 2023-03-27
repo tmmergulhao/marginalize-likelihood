@@ -1,4 +1,4 @@
-# Marginalize Posterior
+# Marginalize Likelihood
 
 ![alt text](https://github.com/tmmergulhao/marginalize-posterior/blob/master/marginalised_vs_nonmarginalised.png?raw=true)
 
